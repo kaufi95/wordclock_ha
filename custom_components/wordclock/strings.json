@@ -1,0 +1,22 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "WordClock",
+        "description": "Set up your WordClock integration",
+        "data": {
+          "host": "Host (IP or hostname like wordclock.local)",
+          "name": "Name"
+        }
+      },
+      "discovery_confirm": {
+        "title": "WordClock discovered",
+        "description": "Do you want to add the WordClock at {host}?"
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to WordClock",
+      "unknown": "Unexpected error occurred"
+    }
+  }
+}

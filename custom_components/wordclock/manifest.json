@@ -1,0 +1,11 @@
+{
+  "domain": "wordclock",
+  "name": "WordClock",
+  "documentation": "https://github.com/kaufi95/wordclock_ha",
+  "dependencies": [],
+  "codeowners": [],
+  "requirements": ["aiohttp>=3.8.0"],
+  "iot_class": "local_polling",
+  "zeroconf": ["_http._tcp.local."],
+  "version": "1.0.0"
+}
