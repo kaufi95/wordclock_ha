@@ -21,7 +21,7 @@ _LOGGER = logging.getLogger(__name__)
 
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
-        vol.Required(CONF_HOST, description="IP address or hostname (e.g., wordclock.local)"): str,
+        vol.Required(CONF_HOST, default="wordclock.local", description="IP address or hostname (e.g., wordclock.local)"): str,
         vol.Optional(CONF_NAME, default="WordClock"): str,
     }
 )
@@ -69,7 +69,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 }
             )
 
-        self._set_confirm_only()
         return self.async_show_form(
             step_id="discovery_confirm",
             description_placeholders={"host": self._discovered_host},
@@ -109,7 +108,7 @@ async def validate_input(hass, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect."""
     host = data[CONF_HOST]
     session = async_get_clientsession(hass)
-    
+
     try:
         async with async_timeout.timeout(10):
             async with session.get(f"http://{host}/status") as response:
@@ -119,4 +118,4 @@ async def validate_input(hass, data: dict[str, Any]) -> dict[str, Any]:
     except (aiohttp.ClientError, asyncio.TimeoutError) as err:
         raise CannotConnect from err
 
-    return {"title": data[CONF_NAME]}
+    return {"title": data.get(CONF_NAME, "WordClock")}

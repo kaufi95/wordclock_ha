@@ -47,6 +47,7 @@ class WordClockLight(LightEntity):
         self._brightness = None
         self._rgb_color = None
         self._available = True
+        self._last_brightness = 128  # Store last non-zero brightness
 
     @property
     def name(self) -> str:
@@ -91,89 +92,111 @@ class WordClockLight(LightEntity):
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Instruct the light to turn on."""
         data = {}
-        
-        if ATTR_BRIGHTNESS in kwargs:
-            # Convert HA brightness (0-255) to WordClock brightness (0-255)
-            data["brightness"] = kwargs[ATTR_BRIGHTNESS]
-        elif self._brightness is None or self._brightness == 0:
-            # Default brightness if not set or currently off
-            data["brightness"] = 128
-        else:
-            # Keep current brightness
-            data["brightness"] = self._brightness
 
+        # Only send brightness if it's being changed
+        if ATTR_BRIGHTNESS in kwargs:
+            new_brightness = kwargs[ATTR_BRIGHTNESS]
+            if new_brightness != self._brightness:
+                data["brightness"] = new_brightness
+        elif self._brightness is None or self._brightness == 0:
+            # Device is off, set to last known brightness
+            data["brightness"] = self._last_brightness
+
+        # Only send RGB if it's being changed
         if ATTR_RGB_COLOR in kwargs:
             rgb = kwargs[ATTR_RGB_COLOR]
-            data["red"] = rgb[0]
-            data["green"] = rgb[1] 
-            data["blue"] = rgb[2]
-        elif self._rgb_color is not None:
-            # Keep current color
-            data["red"] = self._rgb_color[0]
-            data["green"] = self._rgb_color[1]
-            data["blue"] = self._rgb_color[2]
-        else:
-            # Default white color
+            if self._rgb_color != rgb:
+                data["red"] = rgb[0]
+                data["green"] = rgb[1]
+                data["blue"] = rgb[2]
+        elif self._rgb_color is None:
+            # No color set yet, use default white
             data["red"] = 255
             data["green"] = 255
             data["blue"] = 255
 
-        # Always include language (keep current or default)
-        data["language"] = "dialekt"
+        # Only send enabled if device is currently off
+        if not self._state:
+            data["enabled"] = True
 
-        await self._send_update(data)
+        # Only send if there are changes
+        if data:
+            await self._send_update(data)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Instruct the light to turn off."""
-        data = {
-            "brightness": 0,
-            "red": self._rgb_color[0] if self._rgb_color else 255,
-            "green": self._rgb_color[1] if self._rgb_color else 255,
-            "blue": self._rgb_color[2] if self._rgb_color else 255,
-            "language": "dialekt"
-        }
-        await self._send_update(data)
+        # Only send enabled=false if device is currently on
+        if self._state:
+            data = {"enabled": False}
+            await self._send_update(data)
 
     async def async_update(self) -> None:
         """Fetch new state data for this light."""
         try:
             session = async_get_clientsession(self.hass)
-            async with async_timeout.timeout(10):
+            async with async_timeout.timeout(5):  # Reduced timeout to 5 seconds
                 async with session.get(f"http://{self._host}/status") as response:
                     if response.status == 200:
                         data = await response.json()
                         self._brightness = data.get("brightness", 0)
+                        # Store last non-zero brightness for restoration
+                        if self._brightness > 0:
+                            self._last_brightness = self._brightness
                         self._rgb_color = (
                             data.get("red", 255),
                             data.get("green", 255),
                             data.get("blue", 255)
                         )
-                        self._state = self._brightness > 0
+                        # Use enabled state from firmware
+                        self._state = data.get("enabled", self._brightness > 0)
                         self._available = True
                     else:
                         self._available = False
-        except (aiohttp.ClientError, asyncio.TimeoutError):
+                        _LOGGER.debug("WordClock returned status %s", response.status)
+        except asyncio.TimeoutError:
+            # Device is likely powered off or unreachable
+            if self._available:  # Only log once when becoming unavailable
+                _LOGGER.info("WordClock at %s is not responding (device may be powered off)", self._host)
             self._available = False
-            _LOGGER.warning("Error updating WordClock status")
+        except aiohttp.ClientError as err:
+            # Network errors
+            if self._available:  # Only log once when becoming unavailable
+                _LOGGER.info("WordClock at %s is unreachable: %s", self._host, err)
+            self._available = False
 
     async def _send_update(self, data: dict[str, Any]) -> None:
         """Send update to WordClock."""
         try:
             session = async_get_clientsession(self.hass)
-            async with async_timeout.timeout(10):
+            async with async_timeout.timeout(5):  # Reduced timeout to 5 seconds
                 async with session.post(
                     f"http://{self._host}/update",
                     json=data,
                     headers={"Content-Type": "application/json"}
                 ) as response:
                     if response.status == 200:
-                        self._brightness = data["brightness"]
-                        self._rgb_color = (data["red"], data["green"], data["blue"])
-                        self._state = self._brightness > 0
+                        # Store last non-zero brightness for restoration
+                        if "brightness" in data and data["brightness"] > 0:
+                            self._last_brightness = data["brightness"]
+
+                        # Update current state with what was sent
+                        if "brightness" in data:
+                            self._brightness = data["brightness"]
+                        if "red" in data and "green" in data and "blue" in data:
+                            self._rgb_color = (data["red"], data["green"], data["blue"])
+                        if "enabled" in data:
+                            self._state = data["enabled"]
                         self._available = True
                     else:
                         self._available = False
-                        _LOGGER.error("Failed to update WordClock: %s", response.status)
-        except (aiohttp.ClientError, asyncio.TimeoutError):
+                        _LOGGER.warning("Failed to update WordClock: HTTP %s", response.status)
+        except asyncio.TimeoutError:
+            # Device is likely powered off or unreachable
+            if self._available:  # Only log once when becoming unavailable
+                _LOGGER.info("WordClock at %s not responding to update (device may be powered off)", self._host)
             self._available = False
-            _LOGGER.error("Error sending update to WordClock")
+        except aiohttp.ClientError as err:
+            # Network errors
+            if self._available:  # Only log once when becoming unavailable
+                _LOGGER.info("Cannot send update to WordClock at %s: %s", self._host, err)
+            self._available = False

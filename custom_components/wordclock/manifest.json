@@ -6,6 +6,7 @@
   "codeowners": [],
   "requirements": ["aiohttp>=3.8.0"],
   "iot_class": "local_polling",
-  "zeroconf": ["_http._tcp.local."],
+  "zeroconf": ["_wordclock._tcp.local."],
+  "config_flow": true,
   "version": "1.0.0"
 }

@@ -10,8 +10,8 @@
         }
       },
       "discovery_confirm": {
-        "title": "WordClock discovered",
-        "description": "Do you want to add the WordClock at {host}?"
+        "title": "Confirm WordClock Setup",
+        "description": "A WordClock was discovered at {host}.\n\nClick Submit to add this device to Home Assistant."
       }
     },
     "error": {
