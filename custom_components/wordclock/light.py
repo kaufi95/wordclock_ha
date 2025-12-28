@@ -48,6 +48,10 @@ class WordClockLight(LightEntity):
         self._rgb_color = None
         self._available = True
         self._last_brightness = 128  # Store last non-zero brightness
+        self._transition = None
+        self._prefix_mode = None
+        self._transition_speed = None
+        self._language = None
 
     @property
     def name(self) -> str:
@@ -88,6 +92,20 @@ class WordClockLight(LightEntity):
     def supported_color_modes(self) -> set[str]:
         """Flag supported color modes."""
         return {ColorMode.RGB}
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        attributes = {}
+        if self._transition is not None:
+            attributes["transition"] = self._transition
+        if self._prefix_mode is not None:
+            attributes["prefix_mode"] = self._prefix_mode
+        if self._transition_speed is not None:
+            attributes["transition_speed"] = self._transition_speed
+        if self._language is not None:
+            attributes["language"] = self._language
+        return attributes
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Instruct the light to turn on."""
@@ -149,6 +167,10 @@ class WordClockLight(LightEntity):
                         )
                         # Use enabled state from firmware
                         self._state = data.get("enabled", self._brightness > 0)
+                        self._transition = data.get("transition")
+                        self._prefix_mode = data.get("prefixMode")
+                        self._transition_speed = data.get("transitionSpeed")
+                        self._language = data.get("language")
                         self._available = True
                     else:
                         self._available = False
