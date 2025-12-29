@@ -41,7 +41,7 @@ class WordClockLight(CoordinatorEntity, LightEntity):
         """Initialize a WordClock Light."""
         super().__init__(coordinator)
         self._name = name
-        self._last_brightness = 50  # Store last brightness (in wordclock range 5-100)
+        self._last_brightness = 128  # Store last brightness (in range 1-255)
 
     @property
     def name(self) -> str:
@@ -58,15 +58,11 @@ class WordClockLight(CoordinatorEntity, LightEntity):
         """Return the brightness of the light."""
         if self.coordinator.data is None:
             return None
-        # WordClock uses 5-100 range, convert to HA's 0-255 range
-        wc_brightness = self.coordinator.data.get("brightness", 0)
-        if wc_brightness > 0:
-            self._last_brightness = wc_brightness
-        # Convert: 5-100 -> 0-255
-        # Formula: (value - 5) / (100 - 5) * 255
-        if wc_brightness < 5:
-            return 0
-        return int((wc_brightness - 5) / 95 * 255)
+        # WordClock uses 1-255 range, same as HA
+        brightness = self.coordinator.data.get("brightness", 0)
+        if brightness > 0:
+            self._last_brightness = brightness
+        return brightness
 
     @property
     def rgb_color(self) -> tuple[int, int, int] | None:
@@ -123,12 +119,11 @@ class WordClockLight(CoordinatorEntity, LightEntity):
 
         # Only send brightness if it's being changed
         if ATTR_BRIGHTNESS in kwargs:
-            # Convert HA brightness (0-255) to WordClock range (5-100)
-            ha_brightness = kwargs[ATTR_BRIGHTNESS]
-            wc_brightness = int(ha_brightness / 255 * 95 + 5)
-            wc_brightness = max(5, min(100, wc_brightness))  # Clamp to 5-100
-            if ha_brightness != current_brightness:
-                data["brightness"] = wc_brightness
+            # WordClock uses 1-255 range, same as HA
+            new_brightness = kwargs[ATTR_BRIGHTNESS]
+            brightness = max(1, min(255, new_brightness))  # Clamp to 1-255
+            if new_brightness != current_brightness:
+                data["brightness"] = brightness
         elif current_brightness is None or current_brightness == 0:
             # Device is off, set to last known brightness
             data["brightness"] = self._last_brightness

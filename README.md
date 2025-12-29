@@ -7,7 +7,7 @@ https://github.com/kaufi95/wordclock
 ## Features
 
 - 🎨 **RGB Color Control** - Full RGB color customization
-- 🔆 **Brightness Control** - Adjustable brightness (5-100%)
+- 🔆 **Brightness Control** - Adjustable brightness (1-255)
 - ⚡ **Real-time Updates** - Instant synchronization via Server-Sent Events (SSE)
 - 💡 **Super Bright Mode** - Toggle enhanced brightness mode
 - 🎭 **Transition Effects** - Multiple animation options (None, Fade, Wipe, Sparkle)
@@ -56,7 +56,7 @@ Once configured, your WordClock will provide multiple entities in Home Assistant
 ### Light Entity
 
 - **Turn On/Off** - Control power state
-- **Set Brightness** - Adjust brightness from 5-100% (auto-converted from HA's 0-255 scale)
+- **Set Brightness** - Adjust brightness from 1-255 (same range as HA)
 - **Change Color** - Pick any RGB color
 
 ### Switch Entity
@@ -193,11 +193,11 @@ If updates aren't instant:
 2. Verify you see SSE connection messages in HA logs: Settings → System → Logs
 3. Reload the integration: Settings → Devices & Services → WordClock → ⋮ → Reload
 
-### Brightness Range Issues
+### Brightness Range
 
-- The integration automatically converts between HA's 0-255 range and WordClock's 5-100% range
-- Minimum brightness in HA (0%) maps to 5% on the wordclock
-- Maximum brightness in HA (100%) maps to 100% on the wordclock
+- Both Home Assistant and WordClock use the same 1-255 brightness range
+- Values are passed directly without conversion
+- Minimum brightness is 1, maximum is 255
 
 ### Enable Debug Logging
 
@@ -230,7 +230,7 @@ This integration follows Home Assistant development guidelines:
 - **Real-time Updates**: Changes broadcast via SSE to all entities simultaneously
 - **Optimistic Updates**: UI updates immediately on user actions
 - **Auto-reconnection**: 5-second retry on connection failures
-- **Brightness Conversion**: Automatic mapping between HA (0-255) and WordClock (5-100) ranges
+- **Direct Brightness Control**: Both HA and WordClock use 1-255 range (no conversion needed)
 
 ## License
 
