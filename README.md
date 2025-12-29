@@ -1,19 +1,25 @@
 # WordClock Home Assistant Integration
 
-A custom Home Assistant integration for controlling WordClock devices.
+A custom Home Assistant integration for controlling WordClock devices with real-time updates via Server-Sent Events.
 
 https://github.com/kaufi95/wordclock
 
 ## Features
 
 - 🎨 **RGB Color Control** - Full RGB color customization
-- 🔆 **Brightness Control** - Adjustable brightness (0-255)
+- 🔆 **Brightness Control** - Adjustable brightness (5-100%)
+- ⚡ **Real-time Updates** - Instant synchronization via Server-Sent Events (SSE)
+- 💡 **Super Bright Mode** - Toggle enhanced brightness mode
+- 🎭 **Transition Effects** - Multiple animation options (None, Fade, Wipe, Sparkle)
+- ⚙️ **Prefix Mode Control** - Configure time prefix behavior
+- 🌍 **Language Support** - Switch between Dialekt and Deutsch
 - 🔍 **Auto Discovery** - Automatic discovery via mDNS/Zeroconf
 - 🌐 **Network Control** - HTTP-based communication
-- ⚡  **Real-time Updates** - Live status monitoring
 - 🔧 **Easy Setup** - Simple configuration flow
 
 ## Installation
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=kaufi95&repository=wordclock_ha&category=Integration)
 
 ### HACS (Recommended)
 
@@ -45,14 +51,33 @@ WordClock devices broadcasting via mDNS will be automatically discovered and can
 
 ## Usage
 
-Once configured, your WordClock will appear as a light entity in Home Assistant:
+Once configured, your WordClock will provide multiple entities in Home Assistant:
+
+### Light Entity
 
 - **Turn On/Off** - Control power state
-- **Set Brightness** - Adjust brightness from 0-100%
+- **Set Brightness** - Adjust brightness from 5-100% (auto-converted from HA's 0-255 scale)
 - **Change Color** - Pick any RGB color
-- **Automation Ready** - Use in automations and scenes
 
-### Example Automation
+### Switch Entity
+
+- **Super Bright Mode** - Toggle enhanced brightness mode for maximum visibility
+
+### Select Entities
+
+- **Transition Effect** - Choose animation style (None, Fade, Wipe, Sparkle)
+- **Prefix Mode** - Control time prefix behavior (Always, Random, Off)
+- **Language** - Switch between Dialekt and Deutsch
+
+### Number Entity
+
+- **Transition Speed** - Adjust animation speed (0-4)
+
+All entities update **instantly** via Server-Sent Events - changes made in the web interface appear immediately in Home Assistant and vice versa!
+
+### Example Automations
+
+**Morning Routine:**
 
 ```yaml
 automation:
@@ -67,26 +92,84 @@ automation:
         data:
           brightness: 180
           rgb_color: [255, 200, 100] # Warm white
+      - service: select.select_option
+        target:
+          entity_id: select.wordclock_transition
+        data:
+          option: "Fade"
+```
+
+**Movie Mode:**
+
+```yaml
+automation:
+  - alias: "WordClock Movie Mode"
+    trigger:
+      - platform: state
+        entity_id: media_player.tv
+        to: "playing"
+    action:
+      - service: light.turn_on
+        target:
+          entity_id: light.wordclock
+        data:
+          brightness: 50
+          rgb_color: [255, 0, 0]
+      - service: switch.turn_off
+        target:
+          entity_id: switch.wordclock_super_bright
 ```
 
 ## WordClock Device Requirements
 
 Your WordClock device must support the following HTTP endpoints:
 
-- `GET /status` - Returns current state (brightness, red, green, blue)
+- `GET /status` - Returns current state
 - `POST /update` - Accepts JSON payload to update state
+- `GET /events` - Server-Sent Events stream for real-time updates
 
-### Expected JSON Format
+### Status Response Format
 
 ```json
 {
-  "brightness": 128,
   "red": 255,
   "green": 255,
   "blue": 255,
-  "language": "dialekt"
+  "brightness": 60,
+  "language": "deutsch",
+  "enabled": true,
+  "superBright": false,
+  "transition": 1,
+  "prefixMode": 1,
+  "transitionSpeed": 1
 }
 ```
+
+### Update Request Format
+
+Send a JSON payload with any of the above fields to `/update`:
+
+```json
+{
+  "brightness": 80,
+  "red": 255,
+  "green": 100,
+  "blue": 50,
+  "superBright": true
+}
+```
+
+### Server-Sent Events
+
+The `/events` endpoint should stream updates with the `text/event-stream` content type:
+
+```
+event: settings
+data: {"red":255,"green":100,"blue":50,"brightness":80,...}
+
+```
+
+Each change triggers a broadcast to all connected clients, enabling real-time synchronization.
 
 ## Troubleshooting
 
@@ -102,15 +185,52 @@ Your WordClock device must support the following HTTP endpoints:
 - Check Home Assistant logs for detailed error messages
 - Ensure no firewall is blocking communication
 
+### Slow Updates
+
+If updates aren't instant:
+
+1. Check that the `/events` endpoint is working: `curl -N -H "Accept: text/event-stream" http://YOUR_IP/events`
+2. Verify you see SSE connection messages in HA logs: Settings → System → Logs
+3. Reload the integration: Settings → Devices & Services → WordClock → ⋮ → Reload
+
+### Brightness Range Issues
+
+- The integration automatically converts between HA's 0-255 range and WordClock's 5-100% range
+- Minimum brightness in HA (0%) maps to 5% on the wordclock
+- Maximum brightness in HA (100%) maps to 100% on the wordclock
+
+### Enable Debug Logging
+
+Add to `configuration.yaml`:
+
+```yaml
+logger:
+  default: info
+  logs:
+    custom_components.wordclock: debug
+```
+
+Then: Settings → System → Logs → Reload
+
 ## Development
 
 This integration follows Home Assistant development guidelines:
 
 - Async/await patterns for non-blocking operations
-- Proper error handling and logging
+- Server-Sent Events for real-time updates via `DataUpdateCoordinator`
+- Proper error handling and automatic reconnection
 - Config flow for user-friendly setup
-- Zeroconf discovery support
-- Standard light entity implementation
+- Zeroconf/mDNS discovery support
+- Multiple entity types: Light, Switch, Select, Number
+- IoT class: `local_push` (real-time updates, not polling)
+
+### Architecture
+
+- **Coordinator Pattern**: Central `WordClockCoordinator` manages SSE connection
+- **Real-time Updates**: Changes broadcast via SSE to all entities simultaneously
+- **Optimistic Updates**: UI updates immediately on user actions
+- **Auto-reconnection**: 5-second retry on connection failures
+- **Brightness Conversion**: Automatic mapping between HA (0-255) and WordClock (5-100) ranges
 
 ## License
 
